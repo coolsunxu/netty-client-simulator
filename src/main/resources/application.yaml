@@ -1,0 +1,82 @@
+server:
+  port: 8080
+
+logging:
+  file:
+    name: logs/app.log
+  logback:
+    rolling policy:
+      max-file-size: 100MB
+      max-history: 30
+  pattern:
+    console: ""
+  register-shutdown-hook: false
+
+management:
+  server:
+    port: 8080
+  endpoint:
+    shutdown:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+spring:
+  application:
+    name: springboot_prometheus
+
+disruptor:
+  readQueue:
+    prefix: "ConsumeReadThread-"
+    queueSize: 16
+    bufferSize: 512
+    expirationTime: 3600000
+  writeQueue:
+    prefix: "ConsumeWriteThread-"
+    queueSize: 16
+    bufferSize: 512
+    expirationTime: 3600000
+
+netty:
+  threadSize: 0
+  prefix: SelectorEventGroup
+
+client:
+  useTls: true
+  keepAlive: 235
+  host: "localhost"
+  port: 9122
+
+client-manager:
+  connect-limit-size: 100
+  connect-check-interval: 5
+
+thread-pool:
+  connect:
+    prefix: "connectExecutor"
+    core-pool-size: 3
+    max-pool-size: 20
+    keep-alive: 60
+    queue-capacity: 300
+  common:
+    prefix: "commonExecutor"
+    core-pool-size: 3
+    max-pool-size: 20
+    keep-alive: 60
+    queue-capacity: 300
+  async:
+    prefix: "asyncExecutor"
+    core-pool-size: 3
+    max-pool-size: 20
+    keep-alive: 60
+    queue-capacity: 300
+  delayTask:
+    prefix: "delayTaskExecutor"
+    core-pool-size: 3
+    max-pool-size: 20
+    keep-alive: 60
+    queue-capacity: 300
+
+
+

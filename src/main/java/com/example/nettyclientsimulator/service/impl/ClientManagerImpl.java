@@ -21,11 +21,13 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.handler.codec.string.StringEncoder;
-import io.netty.util.concurrent.DefaultThreadFactory;
 import lombok.extern.slf4j.Slf4j;
+import net.openhft.affinity.AffinityStrategies;
+import net.openhft.affinity.AffinityThreadFactory;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * @author sunxu
@@ -82,7 +84,9 @@ public class ClientManagerImpl implements ClientManager {
 
     @PostConstruct
     public void init() {
-        bossGroup = new NioEventLoopGroup(nettyConfig.getThreadSize(), new DefaultThreadFactory(nettyConfig.getPrefix()));
+        // 绑定CPU线程亲和性，提高利用率
+        ThreadFactory threadFactory = new AffinityThreadFactory(nettyConfig.getPrefix(), AffinityStrategies.DIFFERENT_CORE);
+        bossGroup = new NioEventLoopGroup(nettyConfig.getThreadSize(), threadFactory);
         // 添加监控
         nettyMetric.addEventLoopGroupMetric(bossGroup, "netty-thread");
 

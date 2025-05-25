@@ -13,6 +13,7 @@ import com.example.nettyclientsimulator.threadpool.TimingThreadPool;
 import com.example.nettyclientsimulator.transport.Dispatcher;
 import com.example.nettyclientsimulator.transport.Flusher;
 import com.example.nettyclientsimulator.util.SerializeHelper;
+import io.netty.channel.Channel;
 import io.netty.util.ReferenceCountUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -56,7 +57,19 @@ public class ClientServiceImpl implements ClientService {
 
     @Override
     public void write(String str, String clientId) {
-        dispatcher.flush(new Flusher.FlushItem<>(sessionManager.getClient(clientId).getChannel(), str));
+        // 先判断channel是否可写，高低水位，保护系统
+        final Channel channel = sessionManager.getClient(clientId).getChannel();
+        if (channel == null || !channel.isActive()) {
+            log.warn("client {} channel is closed", clientId);
+            return;
+        }
+
+        if (!channel.isWritable()) {
+            log.warn("client {} channel is not writable", clientId);
+            return;
+        }
+
+        dispatcher.flush(new Flusher.FlushItem<>(channel, str));
     }
 
     @Override

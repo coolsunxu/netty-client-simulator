@@ -114,6 +114,13 @@
             <version>5.8.36</version>
         </dependency>
 
+        <dependency>
+            <groupId>net.openhft</groupId>
+            <artifactId>affinity</artifactId>
+            <version>3.0.6</version>
+        </dependency>
+
+
     </dependencies>
     <dependencyManagement>
         <dependencies>

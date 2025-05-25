@@ -3,6 +3,9 @@ package com.example.nettyclientsimulator.util;
 import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * @author sunxu
+ */
 public class MathUtil {
 
     public static int getHashCode(String str) {

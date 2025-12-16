@@ -1,5 +1,6 @@
 package com.example.nettyclientsimulator.service.impl;
 
+import com.example.nettyclientsimulator.client.Client;
 import com.example.nettyclientsimulator.codec.Message;
 import com.example.nettyclientsimulator.disruptor.DisruptorManager;
 import com.example.nettyclientsimulator.disruptor.event.ReadTask;
@@ -7,7 +8,7 @@ import com.example.nettyclientsimulator.result.OperateResult;
 import com.example.nettyclientsimulator.result.OperateStatus;
 import com.example.nettyclientsimulator.service.ClientService;
 import com.example.nettyclientsimulator.service.shutdown.ClientServiceShutdownHook;
-import com.example.nettyclientsimulator.session.impl.SessionManagerImpl;
+import com.example.nettyclientsimulator.session.SessionManager;
 import com.example.nettyclientsimulator.shutdown.ShutdownHooks;
 import com.example.nettyclientsimulator.threadpool.TimingThreadPool;
 import com.example.nettyclientsimulator.transport.Dispatcher;
@@ -36,12 +37,12 @@ public class ClientServiceImpl implements ClientService {
 
     private final TimingThreadPool asyncExecutor;
 
-    private final SessionManagerImpl sessionManager;
+    private final SessionManager sessionManager;
 
 
     public ClientServiceImpl(ShutdownHooks shutdownHooks, DisruptorManager disruptorManager, Dispatcher dispatcher,
                              TimingThreadPool asyncExecutor,
-                             SessionManagerImpl sessionManager) {
+                             SessionManager sessionManager) {
         this.shutdownHooks = shutdownHooks;
         this.disruptorManager = disruptorManager;
         this.dispatcher = dispatcher;
@@ -57,19 +58,21 @@ public class ClientServiceImpl implements ClientService {
 
     @Override
     public void write(String str, String clientId) {
-        // 先判断channel是否可写，高低水位，保护系统
-        final Channel channel = sessionManager.getClient(clientId).getChannel();
-        if (channel == null || !channel.isActive()) {
-            log.warn("client {} channel is closed", clientId);
-            return;
-        }
+        // 先判断 channel 是否可写，高低水位，保护系统
+        sessionManager.getClient(clientId).ifPresentOrElse(client -> {
+            final Channel channel = client.getChannel();
+            if (channel == null || !channel.isActive()) {
+                log.warn("client {} channel is closed", clientId);
+                return;
+            }
 
-        if (!channel.isWritable()) {
-            log.warn("client {} channel is not writable", clientId);
-            return;
-        }
+            if (!channel.isWritable()) {
+                log.warn("client {} channel is not writable", clientId);
+                return;
+            }
 
-        dispatcher.flush(new Flusher.FlushItem<>(channel, str));
+            dispatcher.flush(new Flusher.FlushItem<>(channel, str));
+        }, () -> log.warn("client {} not found", clientId));
     }
 
     @Override
@@ -80,7 +83,10 @@ public class ClientServiceImpl implements ClientService {
             String str = readTask.getTaskContext().toString();
             Message request = SerializeHelper.deserialize(str.getBytes(), Message.class);
             if (!Optional.ofNullable(request).isPresent()) {
-                log.info("client {} decode message error", sessionManager.getClient(readTask.getClientId()).getClientId());
+                String actualClientId = sessionManager.getClient(readTask.getClientId())
+                        .map(Client::getClientId)
+                        .orElse(readTask.getClientId());
+                log.info("client {} decode message error", actualClientId);
             }
 
             assert request != null;
@@ -90,7 +96,7 @@ public class ClientServiceImpl implements ClientService {
             handleAsyncOperate(readTask.getClientId());
 
         } finally {
-            // 必须释放msg数据
+            // 必须释放 msg 数据
             ReferenceCountUtil.release(readTask.getTaskContext());
         }
     }

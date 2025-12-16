@@ -1,6 +1,6 @@
 package com.example.nettyclientsimulator.nettyhandler;
 
-import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson2.JSON;
 import com.example.nettyclientsimulator.codec.Message;
 import com.example.nettyclientsimulator.disruptor.DisruptorManager;
 import com.example.nettyclientsimulator.util.MathUtil;

@@ -30,8 +30,10 @@ public class ThreadPoolMetric {
 
     private static final String SERVICE_EXECUTOR_THREADS_ACTIVE = "service.executor.threads.active";
     private static final String SERVICE_EXECUTOR_THREADS_WAITING = "service.executor.threads.waiting";
-
     private static final String SERVICE_EXECUTOR_THREADS_COST = "service.executor.threads.cost";
+    private static final String SERVICE_EXECUTOR_POOL_SIZE = "service.executor.pool.size";
+    private static final String SERVICE_EXECUTOR_QUEUE_CAPACITY = "service.executor.queue.capacity";
+    private static final String SERVICE_EXECUTOR_COMPLETED_TASKS = "service.executor.completed.tasks";
     private static final String EXECUTOR_NAME = "executor.name";
 
     @PostConstruct
@@ -40,20 +42,40 @@ public class ThreadPoolMetric {
         executorMap.put("connect-executor", connectExecutor);
         executorMap.put("common-executor", commonExecutor);
 
-
         for (Map.Entry<String, TimingThreadPool> entry : executorMap.entrySet()) {
-            // active thread metric
+            // 活跃线程数指标
             Gauge.builder(SERVICE_EXECUTOR_THREADS_ACTIVE, entry.getValue(), TimingThreadPool::getActiveCount)
+                    .description("当前活跃线程数")
                     .tags(EXECUTOR_NAME, entry.getKey())
                     .register(registry);
 
-            // task in queue metric
+            // 队列中等待任务数指标
             Gauge.builder(SERVICE_EXECUTOR_THREADS_WAITING, entry.getValue(), e -> e.getThreadPoolExecutor().getQueue().size())
+                    .description("队列中等待执行的任务数")
                     .tags(EXECUTOR_NAME, entry.getKey())
                     .register(registry);
 
-            // task cost metric
+            // 任务平均耗时指标
             Gauge.builder(SERVICE_EXECUTOR_THREADS_COST, entry.getValue(), TimingThreadPool::getAverageTaskCostTime)
+                    .description("任务平均执行耗时（毫秒）")
+                    .tags(EXECUTOR_NAME, entry.getKey())
+                    .register(registry);
+
+            // 当前线程池大小指标
+            Gauge.builder(SERVICE_EXECUTOR_POOL_SIZE, entry.getValue(), e -> e.getThreadPoolExecutor().getPoolSize())
+                    .description("当前线程池大小")
+                    .tags(EXECUTOR_NAME, entry.getKey())
+                    .register(registry);
+
+            // 队列剩余容量指标
+            Gauge.builder(SERVICE_EXECUTOR_QUEUE_CAPACITY, entry.getValue(), e -> e.getThreadPoolExecutor().getQueue().remainingCapacity())
+                    .description("队列剩余容量")
+                    .tags(EXECUTOR_NAME, entry.getKey())
+                    .register(registry);
+
+            // 已完成任务数指标
+            Gauge.builder(SERVICE_EXECUTOR_COMPLETED_TASKS, entry.getValue(), e -> e.getThreadPoolExecutor().getCompletedTaskCount())
+                    .description("已完成任务总数")
                     .tags(EXECUTOR_NAME, entry.getKey())
                     .register(registry);
         }

@@ -25,7 +25,8 @@ public class ConnectionServiceShutdownHook implements ClientShutdownHook {
 
     @Override
     public ClientShutdownHook.Priority priority() {
-        return Priority.HIGH;
+        // ConnectionService 应该最先关闭，停止新的连接尝试
+        return Priority.VERY_HIGH;
     }
 
     @Override

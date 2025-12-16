@@ -24,7 +24,8 @@ public class ClientManagerShutdownHook implements ClientShutdownHook {
 
     @Override
     public ClientShutdownHook.Priority priority() {
-        return Priority.HIGH;
+        // ClientManager 包含 EventLoopGroup，应该在业务线程池之后关闭
+        return Priority.MEDIUM;
     }
 
     @Override

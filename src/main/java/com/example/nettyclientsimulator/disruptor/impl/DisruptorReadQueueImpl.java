@@ -3,6 +3,7 @@ package com.example.nettyclientsimulator.disruptor.impl;
 import com.example.nettyclientsimulator.config.props.DisruptorConfig;
 import com.example.nettyclientsimulator.disruptor.DisruptorReadQueue;
 import com.example.nettyclientsimulator.disruptor.element.ReadElement;
+import com.example.nettyclientsimulator.disruptor.handler.DisruptorExceptionHandler;
 import com.example.nettyclientsimulator.disruptor.handler.ReadEventHandler;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -43,6 +44,9 @@ public class DisruptorReadQueueImpl implements DisruptorReadQueue {
                     ProducerType.SINGLE,
                     new BlockingWaitStrategy());
 
+            // 设置 ExceptionHandler
+            disruptor.setDefaultExceptionHandler(new DisruptorExceptionHandler<>("ReadQueue-" + finalI));
+            
             // 设置EventHandler
             disruptor.handleEventsWith(new ReadEventHandler(eventPublisher));
 

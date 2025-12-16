@@ -52,6 +52,12 @@ client-manager:
   connect-limit-size: 100
   connect-check-interval: 5
 
+retry:
+  max-retries: 3
+  initial-delay-ms: 1000
+  max-delay-ms: 30000
+  multiplier: 2.0
+
 thread-pool:
   connect:
     prefix: "connectExecutor"

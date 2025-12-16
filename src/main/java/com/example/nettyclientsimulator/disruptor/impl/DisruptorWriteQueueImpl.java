@@ -3,6 +3,7 @@ package com.example.nettyclientsimulator.disruptor.impl;
 import com.example.nettyclientsimulator.config.props.DisruptorConfig;
 import com.example.nettyclientsimulator.disruptor.DisruptorWriteQueue;
 import com.example.nettyclientsimulator.disruptor.element.WriteElement;
+import com.example.nettyclientsimulator.disruptor.handler.DisruptorExceptionHandler;
 import com.example.nettyclientsimulator.disruptor.handler.WriteEventHandler;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -45,6 +46,9 @@ public class DisruptorWriteQueueImpl implements DisruptorWriteQueue {
                     ProducerType.SINGLE,
                     new BlockingWaitStrategy());
 
+            // 设置 ExceptionHandler
+            disruptor.setDefaultExceptionHandler(new DisruptorExceptionHandler<>("WriteQueue-" + finalI));
+            
             // 设置EventHandler
             disruptor.handleEventsWith(new WriteEventHandler(eventPublisher));
 

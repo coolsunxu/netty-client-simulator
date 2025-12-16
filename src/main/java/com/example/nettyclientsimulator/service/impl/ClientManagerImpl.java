@@ -1,14 +1,17 @@
 package com.example.nettyclientsimulator.service.impl;
 
 import com.example.nettyclientsimulator.client.Client;
+import com.example.nettyclientsimulator.config.beans.SslContextProvider;
 import com.example.nettyclientsimulator.config.props.ClientConfig;
 import com.example.nettyclientsimulator.config.props.NettyConfig;
 import com.example.nettyclientsimulator.metric.NettyMetric;
 import com.example.nettyclientsimulator.nettyhandler.ClientHandler;
 import com.example.nettyclientsimulator.nettyhandler.HeartbeatHandler;
 import com.example.nettyclientsimulator.service.ClientManager;
+import com.example.nettyclientsimulator.service.ReportQoeService;
+import com.example.nettyclientsimulator.service.TimeWheelService;
 import com.example.nettyclientsimulator.service.shutdown.ClientManagerShutdownHook;
-import com.example.nettyclientsimulator.session.impl.SessionManagerImpl;
+import com.example.nettyclientsimulator.session.SessionManager;
 import com.example.nettyclientsimulator.shutdown.ShutdownHooks;
 import com.example.nettyclientsimulator.task.ReportQoeTask;
 import com.example.nettyclientsimulator.threadpool.TimingThreadPool;
@@ -50,11 +53,11 @@ public class ClientManagerImpl implements ClientManager {
 
     private final TimingThreadPool commonExecutor;
 
-    private final ReportQoeServiceImpl reportQoeService;
+    private final ReportQoeService reportQoeService;
 
-    private final SessionManagerImpl sessionManager;
+    private final SessionManager sessionManager;
 
-    private final TimeWheelServiceImpl timeWheelService;
+    private final TimeWheelService timeWheelService;
 
     private final NettyMetric nettyMetric;
 
@@ -62,14 +65,17 @@ public class ClientManagerImpl implements ClientManager {
 
     private final ClientConfig clientConfig;
 
+    private final SslContextProvider sslContextProvider;
+
     public ClientManagerImpl(
             ShutdownHooks shutdownHooks, ClientHandler clientHandler,
             HeartbeatHandler heartbeatHandler,
             TimingThreadPool commonExecutor,
-            ReportQoeServiceImpl reportQoeService,
-            SessionManagerImpl sessionManager,
-            TimeWheelServiceImpl timeWheelService,
-            NettyMetric nettyMetric, NettyConfig nettyConfig, ClientConfig clientConfig) {
+            ReportQoeService reportQoeService,
+            SessionManager sessionManager,
+            TimeWheelService timeWheelService,
+            NettyMetric nettyMetric, NettyConfig nettyConfig, ClientConfig clientConfig,
+            SslContextProvider sslContextProvider) {
         this.shutdownHooks = shutdownHooks;
         this.clientHandler = clientHandler;
         this.heartbeatHandler = heartbeatHandler;
@@ -80,6 +86,7 @@ public class ClientManagerImpl implements ClientManager {
         this.nettyMetric = nettyMetric;
         this.nettyConfig = nettyConfig;
         this.clientConfig = clientConfig;
+        this.sslContextProvider = sslContextProvider;
     }
 
     @PostConstruct
@@ -97,18 +104,16 @@ public class ClientManagerImpl implements ClientManager {
 
     @Override
     public void addClient(int batch) {
-        commonExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                for (int i = 0; i < batch; i++) {
-                    try {
-                        String clientId = MathUtil.generateRandomString(10) + "-" + i;
-                        Client client = new Client(clientId, clientConfig.getKeepAlive(), bossGroup, clientHandler,
-                                stringEncoder, stringDecoder, heartbeatHandler, clientConfig.getUseTls());
-                        sessionManager.addClient(clientId, client);
-                    } catch (Exception e) {
-                        log.warn("create client error", e);
-                    }
+        commonExecutor.execute(() -> {
+            for (int i = 0; i < batch; i++) {
+                try {
+                    String clientId = MathUtil.generateRandomString(10) + "-" + i;
+                    Client client = new Client(clientId, clientConfig.getKeepAlive(), bossGroup, clientHandler,
+                            stringEncoder, stringDecoder, heartbeatHandler, clientConfig.getUseTls(),
+                            sslContextProvider.getSslContext(), clientConfig.getConnectTimeoutMs());
+                    sessionManager.addClient(clientId, client);
+                } catch (Exception e) {
+                    log.warn("create client error", e);
                 }
             }
         });
@@ -117,10 +122,8 @@ public class ClientManagerImpl implements ClientManager {
     @Override
     public ReportQoeVO reportQoe(ReportQoeDTO reportQoeDTO) {
         log.info("client {}, add delay task after {} ms", reportQoeDTO.getClientId(), reportQoeDTO.getDelay());
-        commonExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                Client client = sessionManager.getClient(reportQoeDTO.getClientId());
+        commonExecutor.execute(() -> {
+            sessionManager.getClient(reportQoeDTO.getClientId()).ifPresent(client -> {
                 Long timestamp = System.currentTimeMillis() + reportQoeDTO.getDelay();
                 client.setQoe(reportQoeDTO.getEnable(), Math.toIntExact(reportQoeDTO.getDelay()), timestamp);
 
@@ -128,7 +131,7 @@ public class ClientManagerImpl implements ClientManager {
                 if (reportQoeDTO.getEnable()) {
                     timeWheelService.add(new ReportQoeTask(sessionManager, reportQoeService, reportQoeDTO.getClientId()));
                 }
-            }
+            });
         });
         return ReportQoeVO.builder()
                 .clientId(reportQoeDTO.getClientId())
@@ -139,12 +142,9 @@ public class ClientManagerImpl implements ClientManager {
     @Override
     public CloseConnectionVO closeConnection(CloseConnectionDTO closeConnectionDTO) {
         log.info("client {} close connection", closeConnectionDTO.getClientId());
-        commonExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                sessionManager.getClient(closeConnectionDTO.getClientId()).closeConnection();
-            }
-        });
+        commonExecutor.execute(() -> 
+            sessionManager.getClient(closeConnectionDTO.getClientId()).ifPresent(Client::closeConnection)
+        );
         return CloseConnectionVO.builder()
                 .clientId(closeConnectionDTO.getClientId())
                 .build();
@@ -152,7 +152,7 @@ public class ClientManagerImpl implements ClientManager {
 
     @Override
     public void shutdown() {
-        // 关闭bossGroup
+        // 关闭 bossGroup
         bossGroup.shutdownGracefully();
 
         commonExecutor.shutdown();

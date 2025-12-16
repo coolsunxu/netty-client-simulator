@@ -1,37 +1,35 @@
 package com.example.nettyclientsimulator.exception;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import org.springframework.http.HttpStatus;
-
 /**
+ * 业务异常基类
+ *
  * @author sunxu
  */
-
-@EqualsAndHashCode(callSuper = true)
-@AllArgsConstructor
-@Data
 public class BusinessException extends RuntimeException {
 
-    public static final long serialVersionUID = -6735897190745766939L;
-
-    /**
-     * 异常码
-     */
-    private int code;
-
-    /**
-     * 具体异常信息
-     */
-    private String message;
-
-    public BusinessException() {
-        super();
-    }
+    private final int errorCode;
 
     public BusinessException(String message) {
-        this.code = HttpStatus.INTERNAL_SERVER_ERROR.value();
-        this.message = message;
+        super(message);
+        this.errorCode = 500;
+    }
+
+    public BusinessException(int errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
+    }
+
+    public BusinessException(String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = 500;
+    }
+
+    public BusinessException(int errorCode, String message, Throwable cause) {
+        super(message, cause);
+        this.errorCode = errorCode;
+    }
+
+    public int getErrorCode() {
+        return errorCode;
     }
 }

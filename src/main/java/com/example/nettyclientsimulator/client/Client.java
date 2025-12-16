@@ -11,13 +11,12 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.handler.codec.string.StringEncoder;
 import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.timeout.IdleStateHandler;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.net.ssl.SSLException;
-
 /**
+ * Netty 客户端
+ *
  * @author sunxu
  */
 @Slf4j
@@ -27,9 +26,23 @@ public class Client {
     private Channel channel;
     private final Bootstrap bs;
     private final boolean useSsl;
+    private final SslContext sslContext;
 
     private final Qoe qoe = new Qoe();
 
+    /**
+     * 创建客户端（使用共享的 SslContext）
+     *
+     * @param clientId         客户端ID
+     * @param keepAlive        心跳间隔（秒）
+     * @param bossGroup        事件循环组
+     * @param clientHandler    客户端处理器
+     * @param stringEncoder    字符串编码器
+     * @param stringDecoder    字符串解码器
+     * @param heartbeatHandler 心跳处理器
+     * @param useTls           是否使用 TLS
+     * @param sslContext       共享的 SslContext（可为 null）
+     */
     public Client(String clientId,
                   int keepAlive,
                   EventLoopGroup bossGroup,
@@ -37,24 +50,53 @@ public class Client {
                   StringEncoder stringEncoder,
                   StringDecoder stringDecoder,
                   HeartbeatHandler heartbeatHandler,
-                  boolean useTls) {
+                  boolean useTls,
+                  SslContext sslContext) {
+        this(clientId, keepAlive, bossGroup, clientHandler, stringEncoder, stringDecoder,
+                heartbeatHandler, useTls, sslContext, 5000);
+    }
+
+    /**
+     * 创建客户端（使用共享的 SslContext，支持超时配置）
+     *
+     * @param clientId          客户端ID
+     * @param keepAlive         心跳间隔（秒）
+     * @param bossGroup         事件循环组
+     * @param clientHandler     客户端处理器
+     * @param stringEncoder     字符串编码器
+     * @param stringDecoder     字符串解码器
+     * @param heartbeatHandler  心跳处理器
+     * @param useTls            是否使用 TLS
+     * @param sslContext        共享的 SslContext（可为 null）
+     * @param connectTimeoutMs  连接超时时间（毫秒）
+     */
+    public Client(String clientId,
+                  int keepAlive,
+                  EventLoopGroup bossGroup,
+                  ClientHandler clientHandler,
+                  StringEncoder stringEncoder,
+                  StringDecoder stringDecoder,
+                  HeartbeatHandler heartbeatHandler,
+                  boolean useTls,
+                  SslContext sslContext,
+                  int connectTimeoutMs) {
         this.clientId = clientId;
         this.useSsl = useTls;
+        this.sslContext = sslContext;
         bs = new Bootstrap();
         bs.group(bossGroup)
                 .channel(NioSocketChannel.class)
                 .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutMs)
                 .handler(new ChannelInitializer<SocketChannel>() {
                     @Override
-                    protected void initChannel(io.netty.channel.socket.SocketChannel socketChannel) throws SSLException {
-                        if (useSsl) {
-                            SslContext sslContext = SslContextBuilder.forClient().build();
+                    protected void initChannel(SocketChannel socketChannel) {
+                        if (useSsl && sslContext != null) {
                             socketChannel.pipeline().addLast("ssl", sslContext.newHandler(socketChannel.alloc()));
                         }
                         socketChannel.pipeline().addLast(new IdleStateHandler(0, keepAlive, 0));
                         socketChannel.pipeline().addLast(heartbeatHandler);
                         // 可以采用多种编码方式，protobuf string等等
-                        // protobuf可以参考亿级流量Java高并发与网络编程实战
                         socketChannel.pipeline().addLast(stringEncoder);
                         socketChannel.pipeline().addLast(stringDecoder);
                         socketChannel.pipeline().addLast(clientHandler);
@@ -92,13 +134,10 @@ public class Client {
     }
 
     public void closeConnection() {
-        if(this.channel != null && this.channel.isActive()) {
-            this.channel.close().addListener(new ChannelFutureListener() {
-                @Override
-                public void operationComplete(ChannelFuture channelFuture) throws Exception {
-                    log.info("close connection succeed");
-                }
-            });
+        if (this.channel != null && this.channel.isActive()) {
+            this.channel.close().addListener((ChannelFutureListener) future -> 
+                log.info("Client {} connection closed, success: {}", clientId, future.isSuccess())
+            );
         }
     }
 

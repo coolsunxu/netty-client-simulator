@@ -30,12 +30,17 @@ public class TimingThreadPool extends ThreadPoolExecutor {
     @Override
     protected void afterExecute(Runnable r, Throwable t) {
         try {
-            long endTime = System.nanoTime();
-            long taskTime = endTime - startTime.get();
-            numTasks.incrementAndGet();
-            totalTime.addAndGet(taskTime);
-            log.info("cost time {}", taskTime);
+            Long start = startTime.get();
+            if (start != null) {
+                long endTime = System.nanoTime();
+                long taskTime = endTime - start;
+                numTasks.incrementAndGet();
+                totalTime.addAndGet(taskTime);
+                log.debug("task cost time: {} ns", taskTime);
+            }
         } finally {
+            // 清理 ThreadLocal 防止内存泄漏
+            startTime.remove();
             super.afterExecute(r, t);
         }
     }
